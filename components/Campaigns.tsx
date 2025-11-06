@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { PlusCircle, Target, Mail, Send, BarChart2, Edit, Trash2, Search, FileText } from 'lucide-react';
+import { PlusCircle, Target, Mail, Send, BarChart2, Edit, Trash2, Search, FileText, Download } from 'lucide-react';
 import type { Campaign, Prospect, Template, ProspectList } from '../types';
 import { CampaignWorkflow } from './CampaignWorkflow';
 import CreateCampaignModal from './modals/CreateCampaignModal';
@@ -85,6 +85,38 @@ export const Campaigns: React.FC<CampaignsProps> = ({ prospects, connectedIntegr
         setTemplateEditorOpen(true);
     };
 
+    const handleExport = () => {
+        const headers = ['id', 'name', 'status', 'sent', 'opens', 'clicks', 'replies', 'createdDate', 'steps', 'prospectIds', 'prospectListIds'];
+        const csvContent = [
+            headers.join(','),
+            ...filteredCampaigns.map(c => [
+                `"${c.id}"`,
+                `"${c.name.replace(/"/g, '""')}"`,
+                c.status,
+                c.sent,
+                c.opens,
+                c.clicks,
+                c.replies,
+                `"${c.createdDate}"`,
+                `"${JSON.stringify(c.steps).replace(/"/g, '""')}"`, // Stringify complex objects
+                `"${c.prospectIds.join('|')}"`,
+                `"${c.prospectListIds.join('|')}"`
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "campaigns.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
     return (
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {isCreateModalOpen && <CreateCampaignModal onCreateCampaign={handleCreateCampaign} onClose={() => setCreateModalOpen(false)} />}
@@ -109,12 +141,18 @@ export const Campaigns: React.FC<CampaignsProps> = ({ prospects, connectedIntegr
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <CardTitle>All Campaigns ({filteredCampaigns.length})</CardTitle>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                                <input
-                                    type="text" placeholder="Search campaigns..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10 pr-4 py-2 w-full sm:w-64 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
-                                />
+                             <div className="flex items-center space-x-2">
+                                <button onClick={handleExport} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors flex items-center shadow-sm text-sm">
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Export Campaigns
+                                </button>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                    <input
+                                        type="text" placeholder="Search campaigns..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10 pr-4 py-2 w-full sm:w-64 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </CardHeader>

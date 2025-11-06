@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/Card';
-import { Telescope, Search, Loader2, Globe, Briefcase, Building, Bot, Wand2, Copy, Check, Mail, Linkedin, Users, Hash, UserPlus, ExternalLink, Phone, ChevronDown, ChevronRight, BarChart, Link } from 'lucide-react';
+import { Telescope, Search, Loader2, Globe, Briefcase, Building, Bot, Wand2, Copy, Check, Mail, Linkedin, Users, Hash, UserPlus, ExternalLink, Phone, ChevronDown, ChevronRight, BarChart, Link, Download } from 'lucide-react';
 import type { ResearchResult, Prospect, ConfidenceScore } from '../types';
 import { findCompaniesAndExecutives, generateOutreachPlan } from '../services/geminiService';
 
@@ -175,6 +175,37 @@ export const LeadGeneration: React.FC<LeadGenerationProps> = ({ onAddProspects }
         setExpandedRowId(prev => prev === id ? null : id);
     };
 
+    const handleExport = () => {
+        const headers = Object.keys(searchResults[0] || {}).filter(key => !['isGeneratingOutreach', 'isOutreachGenerated', 'outreachSources', 'id'].includes(key));
+        const csvContent = [
+            headers.join(','),
+            ...searchResults.map(row => 
+                headers.map(header => {
+                    const value = (row as any)[header];
+                    if (typeof value === 'string') {
+                        return `"${value.replace(/"/g, '""')}"`;
+                    }
+                    if (Array.isArray(value)) {
+                        return `"${value.join('|').replace(/"/g, '""')}"`;
+                    }
+                    return value;
+                }).join(',')
+            )
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "lead_generation_results.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
     return (
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="mb-6">
@@ -269,17 +300,18 @@ export const LeadGeneration: React.FC<LeadGenerationProps> = ({ onAddProspects }
                     </Card>
                 )}
                 <Card>
-                    <CardHeader className="p-4 border-b border-gray-200 dark:border-slate-700 min-h-[60px]">
+                    <CardHeader className="p-4 border-b border-gray-200 dark:border-slate-700 min-h-[60px] flex justify-between items-center">
+                        <CardTitle className="text-lg">Master Data Table ({searchResults.length} Results)</CardTitle>
                         {selectedIds.length > 0 ? (
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{selectedIds.length} selected</span>
-                                <button onClick={handleAddSelectedToProspects} className="bg-green-600 text-white font-semibold py-1.5 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-sm text-sm">
-                                    <UserPlus className="h-4 w-4 mr-2" />
-                                    Add to Prospects
-                                </button>
-                            </div>
+                           <button onClick={handleAddSelectedToProspects} className="bg-green-600 text-white font-semibold py-1.5 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center shadow-sm text-sm">
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Add {selectedIds.length} to Prospects
+                            </button>
                         ) : (
-                            <CardTitle className="text-lg">Master Data Table ({searchResults.length} Results)</CardTitle>
+                             <button onClick={handleExport} disabled={searchResults.length === 0} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold py-1.5 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors flex items-center shadow-sm text-sm disabled:opacity-50">
+                                <Download className="h-4 w-4 mr-2" />
+                                Export Results
+                            </button>
                         )}
                     </CardHeader>
                     <CardContent className="p-0">

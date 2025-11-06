@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Package, PlusCircle, Percent, Edit, Trash2 } from 'lucide-react';
+import { Package, PlusCircle, Percent, Edit, Trash2, Upload, Download } from 'lucide-react';
 import type { Product } from '../types';
 import AddProductModal from './modals/AddProductModal';
 
@@ -21,6 +21,7 @@ const formatCurrency = (amount: number) => {
 export const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleValueChange = (productId: string, field: 'negotiatedCommissionRate' | 'discountRate', value: string) => {
       const numericValue = parseFloat(value);
@@ -76,8 +77,107 @@ export const Products: React.FC<ProductsProps> = ({ products, setProducts }) => 
       }
   };
 
+  const handleExport = () => {
+        const headers = ['name', 'tier', 'description', 'billingType', 'basePrice', 'commissionRate'];
+        const csvContent = [
+            headers.join(','),
+            ...products.map(p => [
+                `"${p.name.replace(/"/g, '""')}"`,
+                `"${p.tier.replace(/"/g, '""')}"`,
+                `"${p.description.join('|').replace(/"/g, '""')}"`, // Use pipe separator
+                p.billingType,
+                p.basePrice,
+                p.commissionRate * 100 // Export as percentage
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "products.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
+    const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            const rows = text.split('\n');
+            const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+            
+            const headerMap: { [key: string]: number } = {};
+            headers.forEach((header, index) => {
+                headerMap[header] = index;
+            });
+
+            const potentialProducts = rows.slice(1).map(row => {
+                const data = row.split(',');
+                if (data.length < headers.length) return null;
+
+                const name = data[headerMap['name']]?.replace(/"/g, '') || '';
+                if (!name) return null;
+                
+                const commissionRate = parseFloat(data[headerMap['commissionrate']]) / 100 || 0;
+
+                return {
+                    id: `prod_${Date.now()}_${Math.random()}`,
+                    name,
+                    tier: data[headerMap['tier']]?.replace(/"/g, '') || '',
+                    description: data[headerMap['description']]?.replace(/"/g, '').split('|') || [],
+                    billingType: (data[headerMap['billingtype']] as any) === 'Monthly' ? 'Monthly' : 'One-time',
+                    basePrice: parseFloat(data[headerMap['baseprice']]) || 0,
+                    commissionRate: commissionRate,
+                    negotiatedCommissionRate: commissionRate,
+                    discountRate: 0,
+                } as Product;
+            }).filter((p): p is Product => p !== null);
+
+            const existingNames = new Set(products.map(p => p.name.toLowerCase()));
+            const seenNamesInFile = new Set<string>();
+
+            const newUniqueProducts = potentialProducts.filter(product => {
+                const productNameLower = product.name.toLowerCase();
+                if (existingNames.has(productNameLower) || seenNamesInFile.has(productNameLower)) {
+                    return false;
+                }
+                seenNamesInFile.add(productNameLower);
+                return true;
+            });
+
+            if (newUniqueProducts.length > 0) {
+                const duplicateCount = potentialProducts.length - newUniqueProducts.length;
+                let confirmationMessage = `Found ${newUniqueProducts.length} new products to import.`;
+                if (duplicateCount > 0) {
+                    confirmationMessage += ` ${duplicateCount} duplicate or invalid rows were ignored.`;
+                }
+                confirmationMessage += " Would you like to add them?";
+
+                if (window.confirm(confirmationMessage)) {
+                    setProducts(prev => [...prev, ...newUniqueProducts]);
+                }
+            } else {
+                alert('No new products found in the file. All entries were either duplicates of existing products, duplicates within the file, or invalid.');
+            }
+            
+            if(importFileInputRef.current) {
+                importFileInputRef.current.value = "";
+            }
+        };
+        reader.readAsText(file);
+    };
+
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <input type="file" ref={importFileInputRef} onChange={handleImport} style={{ display: 'none' }} accept=".csv" />
         {isModalOpen && <AddProductModal 
             onClose={() => { setIsModalOpen(false); setProductToEdit(null); }} 
             onSaveProduct={handleSaveProduct} 
@@ -88,10 +188,20 @@ export const Products: React.FC<ProductsProps> = ({ products, setProducts }) => 
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Deal Negotiator & Calculator</h1>
                 <p className="mt-1 text-gray-600 dark:text-slate-400">Add, edit, and remove products, then calculate deal profitability in real-time.</p>
             </div>
-            <button onClick={() => { setProductToEdit(null); setIsModalOpen(true); }} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">
-                <PlusCircle className="h-5 w-5 mr-2" />
-                Add Product
-            </button>
+            <div className="flex items-center space-x-2">
+                <button onClick={() => importFileInputRef.current?.click()} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors flex items-center shadow-sm">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import
+                </button>
+                <button onClick={handleExport} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors flex items-center shadow-sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                </button>
+                <button onClick={() => { setProductToEdit(null); setIsModalOpen(true); }} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">
+                    <PlusCircle className="h-5 w-5 mr-2" />
+                    Add Product
+                </button>
+            </div>
         </div>
 
         <Card>

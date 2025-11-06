@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { MoreVertical, Search, Trash2, Tag, PlusCircle, Phone, Briefcase, CheckCircle, AlertCircle, HelpCircle, Zap, Loader2, ArrowUp, ArrowDown, Edit, ChevronDown, ListPlus, List, Users, LayoutGrid } from 'lucide-react';
+import { MoreVertical, Search, Trash2, Tag, PlusCircle, Phone, Briefcase, CheckCircle, AlertCircle, HelpCircle, Zap, Loader2, ArrowUp, ArrowDown, Edit, ChevronDown, ListPlus, List, Users, LayoutGrid, Upload, Download } from 'lucide-react';
 import AddToListModal from './modals/AddToListModal';
 import TaggingModal from './modals/TaggingModal';
 import AddProspectModal from './modals/AddProspectModal';
@@ -52,6 +52,7 @@ export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects, p
     const [sortBy, setSortBy] = useState<'name' | 'company' | 'lastContact'>('lastContact');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedListId, setSelectedListId] = useState<string | null>(null);
+    const importFileInputRef = useRef<HTMLInputElement>(null);
 
     const allTags = useMemo(() => {
         return [...new Set(prospects.flatMap(p => p.tags))].sort();
@@ -296,6 +297,111 @@ export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects, p
         e.currentTarget.classList.remove('bg-blue-100', 'dark:bg-blue-900/30');
     };
 
+    const handleExport = () => {
+        const headers = ['name', 'company', 'email', 'phone', 'title', 'status', 'tags'];
+        const csvContent = [
+            headers.join(','),
+            ...processedProspects.map(p => [
+                `"${p.name.replace(/"/g, '""')}"`,
+                `"${p.company.replace(/"/g, '""')}"`,
+                `"${p.email}"`,
+                `"${p.phone || ''}"`,
+                `"${(p.title || '').replace(/"/g, '""')}"`,
+                p.status,
+                `"${p.tags.join('|')}"` // Use pipe as separator for tags
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "prospects.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
+    const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            const rows = text.split('\n');
+            const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+            
+            const headerMap: { [key: string]: number } = {};
+            headers.forEach((header, index) => {
+                headerMap[header] = index;
+            });
+            
+            const potentialProspects = rows.slice(1).map(row => {
+                const data = row.split(',');
+                if (data.length < headers.length) return null;
+
+                const name = data[headerMap['name']]?.replace(/"/g, '') || '';
+                const email = data[headerMap['email']]?.replace(/"/g, '') || '';
+                if (!name || !email) return null;
+
+                const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                
+                return {
+                    id: `prospect_${Date.now()}_${Math.random()}`,
+                    name,
+                    email,
+                    company: data[headerMap['company']]?.replace(/"/g, '') || '',
+                    phone: data[headerMap['phone']]?.replace(/"/g, '') || undefined,
+                    title: data[headerMap['title']]?.replace(/"/g, '') || undefined,
+                    status: (data[headerMap['status']] as ProspectStatus) || 'New',
+                    tags: data[headerMap['tags']]?.replace(/"/g, '').split('|') || [],
+                    initials,
+                    avatarColor: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+                    lastContact: 'Just imported',
+                    lastContactDate: new Date(),
+                    isEnriched: false,
+                } as Prospect;
+            }).filter((p): p is Prospect => p !== null);
+
+            const existingEmails = new Set(prospects.map(p => p.email.toLowerCase()));
+            const seenEmailsInFile = new Set<string>();
+            
+            const newUniqueProspects = potentialProspects.filter(prospect => {
+                const prospectEmailLower = prospect.email.toLowerCase();
+                if (existingEmails.has(prospectEmailLower) || seenEmailsInFile.has(prospectEmailLower)) {
+                    return false;
+                }
+                seenEmailsInFile.add(prospectEmailLower);
+                return true;
+            });
+
+            if (newUniqueProspects.length > 0) {
+                const duplicateCount = potentialProspects.length - newUniqueProspects.length;
+                let confirmationMessage = `Found ${newUniqueProspects.length} new prospects to import.`;
+                if (duplicateCount > 0) {
+                    confirmationMessage += ` ${duplicateCount} duplicate or invalid rows were ignored.`;
+                }
+                confirmationMessage += " Would you like to add them?";
+
+                if (window.confirm(confirmationMessage)) {
+                    setProspects(prev => [...prev, ...newUniqueProspects]);
+                }
+            } else {
+                alert('No new prospects found in the file. All entries were either duplicates of existing prospects, duplicates within the file, or invalid.');
+            }
+
+            if(importFileInputRef.current) {
+                importFileInputRef.current.value = "";
+            }
+        };
+        reader.readAsText(file);
+    };
+
+
     const isAllSelected = useMemo(() => processedProspects.length > 0 && selectedProspects.length === processedProspects.length, [processedProspects, selectedProspects]);
     
     const renderFilters = () => (
@@ -339,6 +445,7 @@ export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects, p
 
     return (
         <div className="bg-slate-50 dark:bg-slate-900">
+            <input type="file" ref={importFileInputRef} onChange={handleImport} style={{ display: 'none' }} accept=".csv" />
             {isTaggingModalOpen && <TaggingModal onAddTags={handleAddTags} onClose={() => setTaggingModalOpen(false)} />}
             {isAddModalOpen && <AddProspectModal onAddProspect={handleAddProspect} onClose={() => setAddModalOpen(false)} />}
             {isAddToListModalOpen && <AddToListModal onClose={() => setAddToListModalOpen(false)} prospectLists={prospectLists} onAddToList={handleAddSelectedToList} onCreateAndAddToList={handleCreateAndAddToList} />}
@@ -357,10 +464,20 @@ export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects, p
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Prospects</h1>
                         <p className="mt-1 text-gray-600 dark:text-slate-400">Manage and research your leads and potential customers.</p>
                     </div>
-                    <button onClick={() => setAddModalOpen(true)} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">
-                        <PlusCircle className="h-5 w-5 mr-2" />
-                        Add Prospect
-                    </button>
+                     <div className="flex items-center space-x-2">
+                        <button onClick={() => importFileInputRef.current?.click()} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors flex items-center shadow-sm">
+                            <Upload className="h-4 w-4 mr-2" />
+                            Import
+                        </button>
+                         <button onClick={handleExport} className="bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors flex items-center shadow-sm">
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
+                        </button>
+                        <button onClick={() => setAddModalOpen(true)} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">
+                            <PlusCircle className="h-5 w-5 mr-2" />
+                            Add Prospect
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="flex items-center border-b border-gray-200 dark:border-slate-700 mb-4">
