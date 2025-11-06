@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { NavItem, View } from '../types';
 import {
   Rocket, LayoutDashboard, Mail, Bot, BarChart, Settings, LifeBuoy, Zap, Users, Target, CheckCircle, Clock, XCircle, ChevronDown, Telescope
@@ -19,6 +19,23 @@ const navigationItems: NavItem[] = [
 
 export const Header: React.FC<{ activeView: View; setActiveView: (view: View) => void; }> = ({ activeView, setActiveView }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
 
   return (
     <header className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-sm border-b border-gray-200 dark:border-slate-700 fixed w-full top-0 z-50">
@@ -56,9 +73,9 @@ export const Header: React.FC<{ activeView: View; setActiveView: (view: View) =>
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 <span className="text-sm text-gray-600 dark:text-slate-400">All Systems Go</span>
             </div>
-            <div className="relative">
+            <div className="relative" ref={profileMenuRef}>
               <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                onClick={() => setShowProfileMenu(prev => !prev)}
                 className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <div className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
@@ -69,7 +86,6 @@ export const Header: React.FC<{ activeView: View; setActiveView: (view: View) =>
               {showProfileMenu && (
                 <div
                   className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black dark:ring-slate-700 ring-opacity-5"
-                  onMouseLeave={() => setShowProfileMenu(false)}
                 >
                   <div className="py-1">
                     <a onClick={() => { setActiveView('settings'); setShowProfileMenu(false); }} href="#" className="block px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700">Profile</a>

@@ -1,121 +1,124 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Zap, ExternalLink, Search, CheckCircle, Link } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 
-interface Integration {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  category: 'Communication' | 'CRM & Data' | 'Automation';
-  isConnected: boolean;
-}
-
-const allIntegrations: Integration[] = [
-  { id: 'slack', name: 'Slack', description: 'Send notifications and updates directly to your Slack channels.', icon: 'https://cdn.worldvectorlogo.com/logos/slack-new-logo.svg', category: 'Communication', isConnected: true },
-  { id: 'gcal', name: 'Google Calendar', description: 'Sync your meetings and events with your Google Calendar.', icon: 'https://cdn.worldvectorlogo.com/logos/google-calendar.svg', category: 'Communication', isConnected: true },
-  { id: 'm365', name: 'Microsoft 365', description: 'Integrate with Outlook Calendar, Contacts, and Email.', icon: 'https://cdn.worldvectorlogo.com/logos/microsoft-365.svg', category: 'Communication', isConnected: false },
-  { id: 'salesforce', name: 'Salesforce', description: 'Sync your leads, contacts, and accounts with Salesforce.', icon: 'https://cdn.worldvectorlogo.com/logos/salesforce-2.svg', category: 'CRM & Data', isConnected: false },
-  { id: 'hubspot', name: 'HubSpot', description: 'Automatically sync contacts and deals with HubSpot CRM.', icon: 'https://cdn.worldvectorlogo.com/logos/hubspot.svg', category: 'CRM & Data', isConnected: false },
-  { id: 'pipedrive', name: 'Pipedrive', description: 'Keep your Pipedrive deals and contacts up to date.', icon: 'https://cdn.worldvectorlogo.com/logos/pipedrive.svg', category: 'CRM & Data', isConnected: true },
-  { id: 'zapier', name: 'Zapier', description: 'Connect to thousands of other apps with Zapier automation.', icon: 'https://cdn.worldvectorlogo.com/logos/zapier.svg', category: 'Automation', isConnected: false },
+const integrationsList = [
+  { 
+    name: "Salesforce",
+    category: "CRM",
+    description: "Sync contacts, leads, and accounts. Keep your CRM up-to-date with the latest prospect interactions and statuses from SalesPulse AI.",
+    icon: "https://cdn.worldvectorlogo.com/logos/salesforce-2.svg",
+  },
+  { 
+    name: "Slack",
+    category: "Communication",
+    description: "Receive real-time notifications for new leads, campaign replies, and important system alerts directly in your Slack channels.",
+    icon: "https://cdn.worldvectorlogo.com/logos/slack-new-logo.svg",
+  },
+  {
+    name: "LinkedIn",
+    category: "Social Selling",
+    description: "Streamline your outreach by connecting your LinkedIn account to copy messages and open profiles directly from campaigns.",
+    icon: "https://cdn.worldvectorlogo.com/logos/linkedin-icon-2.svg"
+  },
+  { 
+    name: "Google Calendar",
+    category: "Productivity",
+    description: "Automatically sync meetings scheduled through SalesPulse AI with your Google Calendar to avoid double-booking.",
+    icon: "https://cdn.worldvectorlogo.com/logos/google-calendar.svg",
+  },
+  { 
+    name: "Zapier",
+    category: "Automation",
+    description: "Connect SalesPulse AI to thousands of other apps. Automate workflows and create custom integrations with no code.",
+    icon: "https://cdn.worldvectorlogo.com/logos/zapier.svg",
+  },
+   { 
+    name: "HubSpot",
+    category: "CRM",
+    description: "Seamlessly sync your HubSpot contacts and companies. Log activities and manage your pipeline across both platforms.",
+    icon: "https://cdn.worldvectorlogo.com/logos/hubspot.svg",
+  },
+   { 
+    name: "Outlook",
+    category: "Email",
+    description: "Integrate with your Outlook calendar and email for a unified view of your sales activities and communications.",
+    icon: "https://cdn.worldvectorlogo.com/logos/microsoft-outlook-2013-2019.svg",
+  },
 ];
 
-const IntegrationCard: React.FC<{ integration: Integration; onToggleConnect: (id: string) => void; }> = ({ integration, onToggleConnect }) => (
-    <Card className="flex flex-col">
-        <CardContent className="p-6 flex-grow">
+interface IntegrationCardProps {
+    name: string;
+    category: string;
+    description: string;
+    icon: string;
+    isConnected: boolean;
+    onToggle: (name: string, shouldConnect: boolean) => void;
+}
+
+const IntegrationCard: React.FC<IntegrationCardProps> = ({ name, category, description, icon, isConnected, onToggle }) => (
+    <Card className="hover:shadow-lg transition-shadow duration-300 flex flex-col">
+        <CardHeader className="flex flex-row items-center justify-between pb-4">
             <div className="flex items-center space-x-4">
-                <img src={integration.icon} alt={`${integration.name} logo`} className="h-12 w-12" />
+                <img src={icon} alt={`${name} logo`} className="h-10 w-10" />
                 <div>
-                    <h4 className="font-semibold text-lg text-gray-900 dark:text-slate-100">{integration.name}</h4>
-                    <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">{integration.description}</p>
+                    <CardTitle className="text-lg">{name}</CardTitle>
+                    <p className="text-sm text-gray-500 dark:text-slate-400">{category}</p>
                 </div>
             </div>
-        </CardContent>
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t dark:border-slate-700 flex items-center justify-between">
-            {integration.isConnected ? (
-                <div className="flex items-center text-sm font-medium text-green-600 dark:text-green-400">
-                    <CheckCircle className="h-4 w-4 mr-1.5" />
-                    Connected
-                </div>
-            ) : (
-                <div className="flex items-center text-sm font-medium text-gray-500 dark:text-slate-400">
-                    <Link className="h-4 w-4 mr-1.5" />
-                    Not Connected
-                </div>
-            )}
-            <button
-                onClick={() => onToggleConnect(integration.id)}
-                className={`flex-shrink-0 border rounded-md shadow-sm py-1.5 px-3 text-sm font-medium transition-colors ${
-                    integration.isConnected
-                        ? 'bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600'
-                        : 'bg-blue-600 text-white border-transparent hover:bg-blue-700'
+             <button
+                onClick={() => onToggle(name, !isConnected)}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                    isConnected
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/10 dark:hover:text-red-400'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
-            >
-                {integration.isConnected ? 'Manage' : 'Connect'}
+             >
+                {isConnected ? 'Disconnect' : 'Connect'}
             </button>
-        </div>
+        </CardHeader>
+        <CardContent className="flex-grow">
+            <p className="text-sm text-gray-600 dark:text-slate-300">{description}</p>
+        </CardContent>
     </Card>
 );
 
+interface IntegrationsProps {
+    connectedIntegrations: Set<string>;
+    onToggleIntegration: (name: string, isConnected: boolean) => void;
+}
 
-export const Integrations: React.FC = () => {
-    const [integrations, setIntegrations] = useState<Integration[]>(allIntegrations);
-    const [searchTerm, setSearchTerm] = useState('');
+export const Integrations: React.FC<IntegrationsProps> = ({ connectedIntegrations, onToggleIntegration }) => {
+  return (
+    <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Integrations</h1>
+        <p className="mt-1 text-gray-600 dark:text-slate-400 flex items-center">
+            Supercharge your workflow by connecting SalesPulse AI with your favorite tools.
+            <a href="#" className="ml-3 text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center">
+                Explore API Docs <ExternalLink className="h-4 w-4 ml-1" />
+            </a>
+        </p>
+      </div>
 
-    const handleToggleConnect = (id: string) => {
-        setIntegrations(prev =>
-            prev.map(int =>
-                int.id === id ? { ...int, isConnected: !int.isConnected } : int
-            )
-        );
-    };
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {integrationsList.map(integration => (
+            <IntegrationCard
+                key={integration.name}
+                {...integration}
+                isConnected={connectedIntegrations.has(integration.name.toLowerCase())}
+                onToggle={onToggleIntegration}
+            />
+        ))}
+      </div>
 
-    const filteredIntegrations = integrations.filter(int =>
-        int.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        int.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const categories = [...new Set(filteredIntegrations.map(i => i.category))].sort();
-
-
-    return (
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">Integrations & API</h1>
-                <p className="mt-1 text-gray-600 dark:text-slate-400 flex items-center">
-                    Connect SalesPulse AI with your favorite tools to supercharge your workflow.
-                    <a href="#" className="ml-2 text-blue-600 dark:text-blue-400 hover:underline flex items-center">
-                        Explore API Docs <ExternalLink className="h-3 w-3 ml-1" />
-                    </a>
-                </p>
-            </div>
-            
-            <div className="mb-6 relative max-w-sm">
-                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                 <input
-                    type="text"
-                    placeholder="Search integrations..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-200 focus:ring-2 focus:ring-blue-500"
-                />
-            </div>
-
-            {categories.map(category => (
-                <div key={category} className="mb-10">
-                    <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-200 mb-4">{category}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredIntegrations.filter(i => i.category === category).map(integration => (
-                            <IntegrationCard
-                                key={integration.id}
-                                integration={integration}
-                                onToggleConnect={handleToggleConnect}
-                            />
-                        ))}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
+      <div className="mt-12 text-center">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-200">Can't find your integration?</h2>
+        <p className="mt-2 text-gray-600 dark:text-slate-400">We're always adding new connections. Let us know what you'd like to see next!</p>
+        <button className="mt-4 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-4 text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600">
+            Request an Integration
+        </button>
+      </div>
+    </div>
+  );
 };

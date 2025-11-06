@@ -1,545 +1,240 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X, Users, List, Sparkles, Mail, Linkedin, MessageCircle, Plus, ChevronDown, Wand2, Loader2, Bot, Clock, Trash2, GripVertical, Search, PlusCircle, MinusCircle, Link as LinkIcon, Phone, CheckSquare } from 'lucide-react';
-import type { Campaign, Prospect, Template, CampaignStep } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Mail, Linkedin, Phone, Users, BarChart, Settings, ArrowRight, Clock, Trash2, Wand2, Loader2, Copy, ExternalLink, MessageSquare, Briefcase } from 'lucide-react';
+import type { Campaign, CampaignStep, Prospect, Template } from '../../types';
 import { generatePersonalizedEmail } from '../../services/geminiService';
 
 interface CampaignDetailModalProps {
   onClose: () => void;
-  onUpdateCampaign: (campaign: Campaign) => void;
+  onSave: (campaign: Campaign) => void;
   campaign: Campaign;
-  allProspects: Prospect[];
-  allTemplates: Template[];
+  prospects: Prospect[];
+  templates: Template[];
+  connectedIntegrations: Set<string>;
 }
 
-type ModalTab = 'sequence' | 'prospects';
-
-const TabButton = ({ label, icon: Icon, isActive, onClick }: { label: string; icon: React.ElementType, isActive: boolean, onClick: () => void }) => (
-    <button onClick={onClick} className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md transition-colors w-full ${isActive ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
-        <Icon className="h-5 w-5" />
-        <span>{label}</span>
-    </button>
-);
-
-const stepIcons: { [key in CampaignStep['type']]: React.ElementType } = {
-    Email: Mail,
-    LinkedIn: Linkedin,
-    WhatsApp: MessageCircle,
-    Call: Phone,
-    Task: CheckSquare,
+const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
 };
 
-const StepCard: React.FC<{
-    step: CampaignStep;
-    stepNumber: number;
-    allTemplates: Template[];
-    onUpdateStep: (updatedStep: CampaignStep) => void;
-    onDeleteStep: (stepId: string) => void;
-    isExpanded: boolean;
-    onToggleExpand: () => void;
-    campaignProspects: Prospect[];
-}> = ({ step, stepNumber, allTemplates, onUpdateStep, onDeleteStep, isExpanded, onToggleExpand, campaignProspects }) => {
+const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ onClose, onSave, campaign, prospects, templates, connectedIntegrations }) => {
+    const [activeTab, setActiveTab] = useState<'steps' | 'prospects' | 'analytics' | 'settings'>('steps');
+    const [editedCampaign, setEditedCampaign] = useState<Campaign>(campaign);
     
-    const [tone, setTone] = useState('Professional & Respectful');
-    const [previewProspectId, setPreviewProspectId] = useState<string | null>(campaignProspects[0]?.id || null);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generatedContent, setGeneratedContent] = useState('');
-    const [generatedContentSources, setGeneratedContentSources] = useState<any[]>([]);
-    
-    const template = allTemplates.find(t => t.id === step.templateId);
-
-    const handleGenerate = async () => {
-        if (!template || !previewProspectId) return;
-        const prospect = campaignProspects.find(p => p.id === previewProspectId);
-        if (!prospect) return;
-
-        setIsGenerating(true);
-        setGeneratedContent('');
-        setGeneratedContentSources([]);
-        try {
-            const { body, sources } = await generatePersonalizedEmail(template, prospect, tone);
-            setGeneratedContent(body);
-            setGeneratedContentSources(sources);
-        } catch (error) {
-            console.error(error);
-            setGeneratedContent('<p class="text-red-500">An error occurred while generating content.</p>');
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
-    const handleTypeChange = (newType: CampaignStep['type']) => {
-        if (newType === step.type) return;
-
-        let updatedStep: CampaignStep = {
-            id: step.id,
-            type: newType,
-            delayDays: step.delayDays,
-        };
-
-        if (newType === 'Email') {
-            updatedStep.templateId = '';
-        } else {
-            updatedStep.message = '';
-        }
-
-        onUpdateStep(updatedStep);
-    };
-
-    const StepIcon = stepIcons[step.type];
-    const isManualStep = step.type === 'LinkedIn' || step.type === 'WhatsApp' || step.type === 'Call' || step.type === 'Task';
-    
-    const manualStepContent: { [key: string]: { label: string, placeholder: string, previewLabel: string }} = {
-        'LinkedIn': { label: 'LinkedIn Message', placeholder: 'Craft your LinkedIn message here. You can use merge tags like {{first_name}} and {{company}}.', previewLabel: 'Message' },
-        'WhatsApp': { label: 'WhatsApp Message', placeholder: 'Craft your WhatsApp message here. You can use merge tags like {{first_name}} and {{company}}.', previewLabel: 'Message' },
-        'Call': { label: 'Call Script / Notes', placeholder: 'Enter key talking points or a script for the call.', previewLabel: 'Script' },
-        'Task': { label: 'Task Details', placeholder: 'Enter the details of the manual task for the sales rep.', previewLabel: 'Details' },
-    };
-
-    return (
-        <div className="border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-            <div className="p-4 flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                    <GripVertical className="h-5 w-5 text-gray-400 cursor-grab" />
-                    <StepIcon className="h-5 w-5 text-blue-500" />
-                    <div>
-                        <div className="flex items-center space-x-2">
-                            <h4 className="font-semibold text-gray-900 dark:text-slate-100">Step {stepNumber}:</h4>
-                            <select 
-                                value={step.type}
-                                onChange={(e) => handleTypeChange(e.target.value as CampaignStep['type'])}
-                                className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200 text-sm font-medium focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                {Object.keys(stepIcons).map(type => (
-                                    <option key={type} value={type}>{type}</option>
-                                ))}
-                            </select>
-                        </div>
-                        {step.type === 'Email' && (
-                            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">Template: "{template?.name || 'No template selected'}"</p>
-                        )}
-                        {isManualStep && (
-                             <p className="text-sm text-gray-500 dark:text-slate-400 truncate max-w-xs mt-0.5">
-                                {manualStepContent[step.type].previewLabel}: "{step.message?.substring(0, 30) || 'No content yet'}{step.message && step.message.length > 30 ? '...' : ''}"
-                            </p>
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <button onClick={() => onDeleteStep(step.id)} className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700">
-                        <Trash2 className="h-4 w-4" />
-                    </button>
-                    {step.type === 'Email' && (
-                         <button onClick={onToggleExpand} className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600">
-                           {isExpanded ? 'Collapse' : 'Personalize'}
-                        </button>
-                    )}
-                </div>
-            </div>
-            {step.type === 'Email' && (
-                <div className="p-4 border-t border-gray-200 dark:border-slate-700">
-                     <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Select Email Template</label>
-                     <select 
-                        value={step.templateId || ''} 
-                        onChange={(e) => onUpdateStep({...step, templateId: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200"
-                    >
-                        <option value="">-- Choose a template --</option>
-                        {allTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                     </select>
-                </div>
-            )}
-            {isManualStep && (
-                <div className="p-4 border-t border-gray-200 dark:border-slate-700">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{manualStepContent[step.type].label}</label>
-                    <textarea
-                        value={step.message || ''}
-                        onChange={(e) => onUpdateStep({...step, message: e.target.value})}
-                        rows={4}
-                        placeholder={manualStepContent[step.type].placeholder}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                </div>
-            )}
-            {isExpanded && step.type === 'Email' && template && (
-                <div className="p-4 border-t border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* AI Engine */}
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-semibold flex items-center text-gray-900 dark:text-slate-100"><Sparkles className="h-5 w-5 mr-2 text-purple-500"/>AI Personalization Engine</h3>
-                            <div>
-                                <label htmlFor={`preview-prospect-${step.id}`} className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Preview for Prospect</label>
-                                <select id={`preview-prospect-${step.id}`} value={previewProspectId || ''} onChange={(e) => setPreviewProspectId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200">
-                                    {campaignProspects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor={`tone-${step.id}`} className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Tone of Voice</label>
-                                <select id={`tone-${step.id}`} value={tone} onChange={(e) => setTone(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200">
-                                    <option>Strategic & Formal</option>
-                                    <option>Collaborative & Informal</option>
-                                    <option>Direct & ROI-Focused</option>
-                                    <option>Friendly & Inquisitive</option>
-                                </select>
-                            </div>
-                            <button onClick={handleGenerate} disabled={isGenerating || !previewProspectId} className="w-full inline-flex justify-center items-center bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                {isGenerating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Wand2 className="mr-2 h-5 w-5" />}
-                                {isGenerating ? 'Generating...' : 'Generate Personalized Content'}
-                            </button>
-                        </div>
-
-                        {/* Preview Area */}
-                        <div className="bg-slate-100 dark:bg-slate-900/50 p-4 rounded-lg min-h-[250px]">
-                            <h4 className="text-md font-medium text-gray-900 dark:text-slate-100 mb-2">AI-Generated Preview</h4>
-                            <div className="prose prose-sm dark:prose-invert max-w-none p-4 bg-white dark:bg-slate-800 rounded-md h-full overflow-y-auto">
-                                {isGenerating ? (
-                                    <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-slate-400">
-                                        <Bot className="mx-auto h-8 w-8 animate-bounce text-purple-500" />
-                                        <p className="mt-2">AI is crafting the perfect message...</p>
-                                    </div>
-                                ) : (
-                                    generatedContent ? <div dangerouslySetInnerHTML={{ __html: generatedContent }} /> : <p className="text-gray-400 dark:text-slate-500">Your personalized content will appear here.</p>
-                                )}
-                            </div>
-                            {generatedContentSources.length > 0 && (
-                                <div className="mt-2">
-                                    <h5 className="text-xs font-semibold text-gray-600 dark:text-slate-400 flex items-center"><LinkIcon className="h-3 w-3 mr-1" />Sources:</h5>
-                                    <ul className="list-disc list-inside text-xs space-y-0.5 mt-1">
-                                        {generatedContentSources.map((source, i) => source.web && (
-                                            <li key={i} className="truncate">
-                                                <a href={source.web.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{source.web.title}</a>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-const DelayIndicator: React.FC<{ days: number; onUpdateDelay: (days: number) => void }> = ({ days, onUpdateDelay }) => (
-    <div className="flex justify-center items-center relative h-16">
-        {/* Vertical line */}
-        <div className="w-px h-full bg-gray-300 dark:bg-slate-600 absolute"></div>
-        
-        {/* Editable delay badge */}
-        <div className="relative z-10 flex items-center space-x-2 bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 rounded-full border border-gray-300 dark:border-slate-600 shadow-sm">
-            <Clock className="h-4 w-4 text-gray-500 dark:text-slate-400" />
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Wait</span>
-            <input 
-                type="number" 
-                value={days} 
-                onChange={(e) => onUpdateDelay(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                className="w-12 text-center bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-500 rounded-md py-0.5 text-sm font-semibold text-blue-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">days</span>
-        </div>
-    </div>
-);
-
-
-const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ onClose, campaign: initialCampaign, allProspects, allTemplates, onUpdateCampaign }) => {
-    const [campaign, setCampaign] = useState<Campaign>(initialCampaign);
-    const [activeTab, setActiveTab] = useState<ModalTab>('sequence');
-    const [showAddStepMenu, setShowAddStepMenu] = useState(false);
-    const [expandedStepId, setExpandedStepId] = useState<string | null>(null);
-    const [inCampaignSearch, setInCampaignSearch] = useState('');
-    const [availableSearch, setAvailableSearch] = useState('');
-    
-    // State for drag-and-drop
-    const [draggedStepId, setDraggedStepId] = useState<string | null>(null);
-    const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-
-    useEffect(() => {
-        setCampaign(initialCampaign);
-    }, [initialCampaign]);
-
-    const campaignProspects = useMemo(() => {
-        return allProspects.filter(p => campaign.prospectIds.includes(p.id));
-    }, [campaign.prospectIds, allProspects]);
-
-    const availableProspects = useMemo(() => {
-        const campaignProspectIds = new Set(campaign.prospectIds);
-        return allProspects.filter(p => !campaignProspectIds.has(p.id));
-    }, [campaign.prospectIds, allProspects]);
-
-    const filteredCampaignProspects = useMemo(() => {
-        if (!inCampaignSearch) return campaignProspects;
-        const lowercasedFilter = inCampaignSearch.toLowerCase();
-        return campaignProspects.filter(p => p.name.toLowerCase().includes(lowercasedFilter) || p.company.toLowerCase().includes(lowercasedFilter));
-    }, [campaignProspects, inCampaignSearch]);
-
-    const filteredAvailableProspects = useMemo(() => {
-        if (!availableSearch) return availableProspects;
-        const lowercasedFilter = availableSearch.toLowerCase();
-        return availableProspects.filter(p => p.name.toLowerCase().includes(lowercasedFilter) || p.company.toLowerCase().includes(lowercasedFilter));
-    }, [availableProspects, availableSearch]);
-
-    const handleAddProspect = (prospectId: string) => {
-        if (!campaign.prospectIds.includes(prospectId)) {
-            setCampaign(prev => ({...prev, prospectIds: [...prev.prospectIds, prospectId]}));
-        }
-    };
-
-    const handleRemoveProspect = (prospectId: string) => {
-        setCampaign(prev => ({...prev, prospectIds: prev.prospectIds.filter(id => id !== prospectId)}));
-    };
+    // AI Personalization State
+    const [personalizationState, setPersonalizationState] = useState<{ [stepId: string]: { prospectId?: string; isGenerating?: boolean; content?: string; sources?: any[] } }>({});
 
     const handleAddStep = (type: CampaignStep['type']) => {
-        let delayDays = 3;
-        if (type === 'WhatsApp' || type === 'Task') {
-            delayDays = 1;
-        } else if (type === 'Call') {
-            delayDays = 2;
-        }
-
         const newStep: CampaignStep = {
-            id: crypto.randomUUID(),
+            id: `s${Date.now()}`,
             type,
-            delayDays,
+            delayDays: 3,
+            templateId: type === 'Email' && templates.length > 0 ? templates[0].id : undefined,
+            message: type !== 'Email' ? `Your message for the ${type} step...` : undefined,
         };
-        if (type === 'Email') {
-            newStep.templateId = '';
-        } else {
-            newStep.message = '';
-        }
-        setCampaign(prev => ({...prev, steps: [...prev.steps, newStep]}));
-        setShowAddStepMenu(false);
+        setEditedCampaign(prev => ({ ...prev, steps: [...prev.steps, newStep] }));
     };
 
-    const handleUpdateStep = (updatedStep: CampaignStep) => {
-        setCampaign(prev => ({...prev, steps: prev.steps.map(s => s.id === updatedStep.id ? updatedStep : s)}));
+    const handleUpdateStep = (stepId: string, updatedField: Partial<CampaignStep>) => {
+        setEditedCampaign(prev => ({
+            ...prev,
+            steps: prev.steps.map(step => {
+                if (step.id !== stepId) return step;
+                
+                const newStep = { ...step, ...updatedField };
+                
+                // When type changes, reset type-specific fields
+                if (updatedField.type) {
+                    if (updatedField.type === 'Email') {
+                        newStep.message = undefined;
+                        newStep.templateId = templates.length > 0 ? templates[0].id : undefined;
+                    } else {
+                        newStep.templateId = undefined;
+                        newStep.message = `Your message for the ${updatedField.type} step...`;
+                    }
+                }
+                return newStep;
+            }),
+        }));
     };
-
-    const handleDeleteStep = (stepId: string) => {
-        if (window.confirm('Are you sure you want to delete this step?')) {
-            setCampaign(prev => ({...prev, steps: prev.steps.filter(s => s.id !== stepId)}));
-        }
+    
+    const handleRemoveStep = (stepId: string) => {
+        setEditedCampaign(prev => ({ ...prev, steps: prev.steps.filter(step => step.id !== stepId) }));
+        setPersonalizationState(prev => {
+            const newState = {...prev};
+            delete newState[stepId];
+            return newState;
+        });
     };
-
+    
     const handleSave = () => {
-        onUpdateCampaign(campaign);
-        onClose();
+        onSave(editedCampaign);
     };
 
-    // Drag-and-drop handlers
-    const handleDragStart = (e: React.DragEvent, stepId: string) => {
-        setDraggedStepId(stepId);
-        e.dataTransfer.effectAllowed = 'move';
-    };
+    const handleGeneratePersonalization = async (stepId: string, templateId: string, prospectId: string, tone: string) => {
+        const prospect = prospects.find(p => p.id === prospectId);
+        const template = templates.find(t => t.id === templateId);
 
-    const handleDragOver = (e: React.DragEvent, stepId: string) => {
-        e.preventDefault();
-        if (draggedStepId !== stepId) {
-            setDropTargetId(stepId);
+        if (!prospect || !template) return;
+
+        setPersonalizationState(prev => ({ ...prev, [stepId]: { ...prev[stepId], isGenerating: true, content: undefined, sources: [] } }));
+
+        try {
+            const { body, sources } = await generatePersonalizedEmail(template, prospect, tone);
+            setPersonalizationState(prev => ({ ...prev, [stepId]: { ...prev[stepId], isGenerating: false, content: body, sources: sources }}));
+        } catch (error) {
+            console.error(error);
+            setPersonalizationState(prev => ({ ...prev, [stepId]: { ...prev[stepId], isGenerating: false, content: 'Error generating content.' }}));
         }
     };
     
-    const handleDragLeave = () => {
-        setDropTargetId(null);
+    const isProspectInCampaign = (prospectId: string) => editedCampaign.prospectIds.includes(prospectId);
+
+    const handleToggleProspect = (prospectId: string) => {
+        setEditedCampaign(prev => {
+            const newProspectIds = isProspectInCampaign(prospectId)
+                ? prev.prospectIds.filter(id => id !== prospectId)
+                : [...prev.prospectIds, prospectId];
+            return { ...prev, prospectIds: newProspectIds };
+        })
     };
 
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        if (!draggedStepId || !dropTargetId || draggedStepId === dropTargetId) {
-            handleDragEnd();
-            return;
-        }
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
-        const currentSteps = campaign.steps;
-        const draggedIndex = currentSteps.findIndex(s => s.id === draggedStepId);
-        const dropIndex = currentSteps.findIndex(s => s.id === dropTargetId);
-
-        if (draggedIndex === -1 || dropIndex === -1) {
-            handleDragEnd();
-            return;
-        }
-
-        const newSteps = Array.from(currentSteps);
-        const [removed] = newSteps.splice(draggedIndex, 1);
-        newSteps.splice(dropIndex, 0, removed);
-        
-        setCampaign(prev => ({ ...prev, steps: newSteps }));
-        handleDragEnd();
-    };
-    
-    const handleDragEnd = () => {
-        setDraggedStepId(null);
-        setDropTargetId(null);
-    };
-
-    const ProspectList: React.FC<{
-        title: string;
-        prospects: Prospect[];
-        searchTerm: string;
-        onSearchChange: (value: string) => void;
-        onAction: (prospectId: string) => void;
-        actionIcon: React.ElementType;
-        actionColor: string;
-    }> = ({ title, prospects, searchTerm, onSearchChange, onAction, actionIcon: ActionIcon, actionColor }) => (
-        <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-900/50 rounded-lg p-4">
-            <h3 className="text-md font-semibold text-gray-800 dark:text-slate-200 mb-3">{title} ({prospects.length})</h3>
-            <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                    type="text"
-                    placeholder="Search prospects..."
-                    value={searchTerm}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                    className="w-full pl-9 pr-4 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-sm text-gray-900 dark:text-slate-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-            </div>
-            <ul className="divide-y divide-gray-200 dark:divide-slate-700 overflow-y-auto flex-grow -mx-4 px-4">
-                {prospects.length > 0 ? prospects.map(prospect => (
-                    <li key={prospect.id} className="py-2 flex items-center justify-between">
-                        <div className="flex items-center min-w-0">
-                            <div className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center text-white font-semibold text-xs" style={{ backgroundColor: prospect.avatarColor }}>
-                                {prospect.initials}
-                            </div>
-                            <div className="ml-3 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate">{prospect.name}</p>
-                                <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{prospect.company}</p>
-                            </div>
-                        </div>
-                        <button onClick={() => onAction(prospect.id)} className={`p-1.5 rounded-full ${actionColor} transition-colors flex-shrink-0 ml-2`}>
-                            <ActionIcon className="h-4 w-4 text-white" />
-                        </button>
-                    </li>
-                )) : (
-                    <div className="text-center py-8 text-sm text-gray-500 dark:text-slate-400">No prospects found.</div>
-                )}
-            </ul>
-        </div>
-    );
+    const stepIcons: { [key in CampaignStep['type']]: React.ElementType } = { Email: Mail, LinkedIn: Linkedin, Call: Phone, Task: Briefcase, WhatsApp: MessageSquare };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onClick={onClose}>
-            <div
-                className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col transform transition-all duration-300 ease-out"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col transform transition-all duration-300 ease-out" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">{campaign.name}</h3>
-                        <p className="text-sm text-gray-500 dark:text-slate-400">Campaign Editor</p>
+                    <input type="text" value={editedCampaign.name} onChange={(e) => setEditedCampaign(p => ({...p, name: e.target.value}))} className="text-lg font-semibold text-gray-900 dark:text-slate-100 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded-md -ml-2 p-1"/>
+                    <div className="flex items-center space-x-2">
+                         <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm flex items-center"><Save className="h-4 w-4 mr-2" /> Save & Close</button>
+                        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><X className="h-5 w-5" /></button>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                        <X className="h-5 w-5" />
-                    </button>
                 </div>
+                <div className="flex-grow flex min-h-0">
+                    <nav className="w-48 p-4 border-r border-gray-200 dark:border-slate-700 flex-shrink-0">
+                        <ul className="space-y-1">
+                            {[{ id: 'steps', name: 'Steps', icon: ArrowRight }, { id: 'prospects', name: 'Prospects', icon: Users }, { id: 'analytics', name: 'Analytics', icon: BarChart }, { id: 'settings', name: 'Settings', icon: Settings }].map(item => (
+                                <li key={item.id}><button onClick={() => setActiveTab(item.id as any)} className={`w-full flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === item.id ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'}`}><item.icon className="h-5 w-5 mr-3" /> {item.name}</button></li>
+                            ))}
+                        </ul>
+                    </nav>
+                    <div className="flex-1 overflow-y-auto p-6">
+                        {activeTab === 'steps' && (
+                            <div className="space-y-4">
+                                {editedCampaign.steps.map((step, index) => {
+                                    const StepIcon = stepIcons[step.type] || Mail;
+                                    const currentPersonalization = personalizationState[step.id] || {};
+                                    const assignedProspects = prospects.filter(p => editedCampaign.prospectIds.includes(p.id));
 
-                <div className="flex flex-grow min-h-0">
-                    {/* Sidebar */}
-                    <div className="w-64 p-4 border-r border-gray-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50">
-                        <div className="space-y-2">
-                           <TabButton label="Sequence" icon={List} isActive={activeTab === 'sequence'} onClick={() => setActiveTab('sequence')} />
-                           <TabButton label="Prospects" icon={Users} isActive={activeTab === 'prospects'} onClick={() => setActiveTab('prospects')} />
-                        </div>
-                    </div>
-
-                    {/* Main Content */}
-                    <div className="flex-grow p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
-                        {activeTab === 'sequence' && (
-                            <div className="max-w-3xl mx-auto">
-                                <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200 mb-6">Campaign Sequence</h2>
-                                
-                                <div onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
-                                    {campaign.steps.map((step, index) => (
-                                        <div key={step.id}>
-                                            {dropTargetId === step.id && draggedStepId !== step.id && (
-                                                <div className="h-1.5 my-3 rounded-full bg-blue-500" />
-                                            )}
-                                            <div
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, step.id)}
-                                                onDragOver={(e) => handleDragOver(e, step.id)}
-                                                onDragLeave={handleDragLeave}
-                                                onDragEnd={handleDragEnd}
-                                                className={`transition-opacity ${draggedStepId === step.id ? 'opacity-30' : 'opacity-100'}`}
-                                            >
-                                                {index > 0 && <DelayIndicator days={step.delayDays} onUpdateDelay={(days) => handleUpdateStep({...step, delayDays: days})} />}
-                                                <StepCard 
-                                                    step={step} 
-                                                    stepNumber={index + 1}
-                                                    allTemplates={allTemplates}
-                                                    onUpdateStep={handleUpdateStep}
-                                                    onDeleteStep={handleDeleteStep}
-                                                    isExpanded={expandedStepId === step.id}
-                                                    onToggleExpand={() => setExpandedStepId(prev => prev === step.id ? null : step.id)}
-                                                    campaignProspects={campaignProspects}
-                                                />
+                                    return (
+                                    <div key={step.id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border dark:border-slate-700 flex items-start gap-4">
+                                        <div className="flex flex-col items-center">
+                                            <div className="h-10 w-10 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center border dark:border-slate-600"><StepIcon className="h-5 w-5 text-gray-600 dark:text-slate-300" /></div>
+                                            <div className="text-xs mt-2 text-gray-500 dark:text-slate-400">Step {index + 1}</div>
+                                        </div>
+                                        <div className="flex-grow space-y-3">
+                                            <div className="flex items-center gap-4 flex-wrap">
+                                                <select value={step.type} onChange={(e) => handleUpdateStep(step.id, { type: e.target.value as any})} className="py-1 pl-2 pr-8 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                    <option>Email</option><option>LinkedIn</option><option>WhatsApp</option><option>Call</option><option>Task</option>
+                                                </select>
+                                                <div className="flex items-center">
+                                                    <Clock className="h-4 w-4 mr-2 text-gray-500"/><span className="text-sm mr-1">Wait</span>
+                                                    <input type="number" value={step.delayDays} onChange={(e) => handleUpdateStep(step.id, {delayDays: parseInt(e.target.value)})} min="0" className="w-16 p-1 text-center border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm focus:ring-blue-500 focus:border-blue-500"/>
+                                                    <span className="text-sm ml-1">days</span>
+                                                </div>
                                             </div>
+                                            {step.type === 'Email' && (
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="text-sm font-medium text-gray-700 dark:text-slate-300">Template:</label>
+                                                        <select value={step.templateId} onChange={(e) => handleUpdateStep(step.id, { templateId: e.target.value })} className="mt-1 w-full p-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div className="p-3 bg-slate-100 dark:bg-slate-700/50 rounded-md space-y-2">
+                                                        <h4 className="text-sm font-semibold flex items-center text-gray-800 dark:text-slate-200"><Wand2 className="h-4 w-4 mr-2 text-purple-500"/>AI Personalization</h4>
+                                                        {assignedProspects.length > 0 ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <select value={currentPersonalization.prospectId || ''} onChange={(e) => setPersonalizationState(p => ({...p, [step.id]: {...p[step.id], prospectId: e.target.value}}))} className="flex-grow p-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm focus:ring-blue-500 focus:border-blue-500">
+                                                                    <option value="">Select prospect to preview...</option>
+                                                                    {assignedProspects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                                                </select>
+                                                                <button onClick={() => handleGeneratePersonalization(step.id, step.templateId!, currentPersonalization.prospectId!, 'Professional')} disabled={!currentPersonalization.prospectId || currentPersonalization.isGenerating} className="px-3 py-2 bg-purple-600 text-white rounded-md text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm flex items-center disabled:opacity-50">
+                                                                    {currentPersonalization.isGenerating ? <Loader2 className="h-4 w-4 animate-spin"/> : 'Generate'}
+                                                                </button>
+                                                            </div>
+                                                        ) : <p className="text-xs text-gray-500 dark:text-slate-400">Add prospects to the campaign to enable personalization.</p>}
+                                                        {currentPersonalization.isGenerating ? (<div className="text-center p-4 text-sm text-gray-500">Generating with Gemini...</div>) : currentPersonalization.content && (
+                                                            <div className="prose prose-sm dark:prose-invert max-w-none p-3 bg-white dark:bg-slate-800 rounded-md border dark:border-slate-600" dangerouslySetInnerHTML={{ __html: currentPersonalization.content }}/>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {(step.type === 'LinkedIn' || step.type === 'WhatsApp' || step.type === 'Call' || step.type === 'Task') && (
+                                                <div>
+                                                    <label className="text-sm font-medium text-gray-700 dark:text-slate-300">{step.type} Details:</label>
+                                                    <textarea value={step.message} onChange={(e) => handleUpdateStep(step.id, { message: e.target.value })} rows={3} className="mt-1 w-full p-2 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                                                    {step.type === 'LinkedIn' && (
+                                                        <div className="mt-2">
+                                                            {connectedIntegrations.has('linkedin') ? (
+                                                                <button onClick={() => {
+                                                                    copyToClipboard(step.message || '');
+                                                                    const prospect = prospects.find(p => p.id === assignedProspects[0]?.id); // Open first prospect's profile as example
+                                                                    if (prospect?.linkedInUrl) window.open(prospect.linkedInUrl, '_blank');
+                                                                    else alert('Message copied! No LinkedIn URL for first prospect.');
+                                                                }} className="inline-flex items-center px-3 py-1.5 text-sm font-semibold rounded-md text-blue-600 bg-blue-50 dark:bg-blue-900/50 hover:bg-blue-100 dark:hover:bg-blue-900">
+                                                                    <Copy className="h-4 w-4 mr-2" /> Copy Message & Open Profile
+                                                                </button>
+                                                            ) : (
+                                                                <button disabled title="Connect LinkedIn in Integrations to enable" className="inline-flex items-center px-3 py-1.5 text-sm font-semibold rounded-md text-gray-500 bg-gray-100 dark:bg-slate-700 cursor-not-allowed">
+                                                                    <Copy className="h-4 w-4 mr-2" /> Copy Message & Open Profile
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
-                                
-                                {campaign.steps.length === 0 && (
-                                    <div className="text-center py-16">
-                                        <p className="text-gray-500 dark:text-slate-400">This campaign sequence is empty.</p>
+                                        <button onClick={() => handleRemoveStep(step.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="h-5 w-5"/></button>
                                     </div>
-                                )}
-                                
-                                <div className="relative mt-6 flex justify-center">
-                                    <button onClick={() => setShowAddStepMenu(true)} className="bg-white dark:bg-slate-800 border border-gray-400 dark:border-slate-500 text-gray-800 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors flex items-center shadow-sm text-sm focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Add Step
-                                    </button>
-                                    {showAddStepMenu && (
-                                        <div 
-                                            onMouseLeave={() => setShowAddStepMenu(false)}
-                                            className="absolute bottom-full mb-2 bg-white dark:bg-slate-700 rounded-lg shadow-xl z-10 p-2 space-y-1"
-                                        >
-                                            <button onClick={() => handleAddStep('Email')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><Mail className="h-5 w-5 mr-3 text-gray-500"/>Email</button>
-                                            <button onClick={() => handleAddStep('LinkedIn')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><Linkedin className="h-5 w-5 mr-3 text-sky-600"/>LinkedIn Message</button>
-                                            <button onClick={() => handleAddStep('WhatsApp')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><MessageCircle className="h-5 w-5 mr-3 text-green-500"/>WhatsApp</button>
-                                            <div className="border-t border-gray-200 dark:border-slate-600 my-1"></div>
-                                            <button onClick={() => handleAddStep('Call')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><Phone className="h-5 w-5 mr-3 text-purple-500"/>Phone Call</button>
-                                            <button onClick={() => handleAddStep('Task')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><CheckSquare className="h-5 w-5 mr-3 text-yellow-500"/>Manual Task</button>
-                                        </div>
-                                    )}
+                                )})}
+                                <div className="flex items-center justify-center gap-2 pt-4 border-t border-dashed dark:border-slate-700 flex-wrap">
+                                    <button onClick={() => handleAddStep('Email')} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 flex items-center"><Mail className="h-4 w-4 mr-2"/>Add Email</button>
+                                    <button onClick={() => handleAddStep('LinkedIn')} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 flex items-center"><Linkedin className="h-4 w-4 mr-2"/>Add LinkedIn</button>
+                                    <button onClick={() => handleAddStep('WhatsApp')} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 flex items-center"><MessageSquare className="h-4 w-4 mr-2"/>Add WhatsApp</button>
+                                    <button onClick={() => handleAddStep('Call')} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 flex items-center"><Phone className="h-4 w-4 mr-2"/>Add Call</button>
+                                    <button onClick={() => handleAddStep('Task')} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-700 border dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 flex items-center"><Briefcase className="h-4 w-4 mr-2"/>Add Task</button>
                                 </div>
                             </div>
                         )}
                         {activeTab === 'prospects' && (
-                             <div className="h-full flex flex-col">
-                                <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200 mb-4 flex-shrink-0">Manage Campaign Prospects</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-grow min-h-0">
-                                    <ProspectList
-                                        title="Prospects in Campaign"
-                                        prospects={filteredCampaignProspects}
-                                        searchTerm={inCampaignSearch}
-                                        onSearchChange={setInCampaignSearch}
-                                        onAction={handleRemoveProspect}
-                                        actionIcon={MinusCircle}
-                                        actionColor="bg-red-500 hover:bg-red-600"
-                                    />
-                                    <ProspectList
-                                        title="Available Prospects"
-                                        prospects={filteredAvailableProspects}
-                                        searchTerm={availableSearch}
-                                        onSearchChange={setAvailableSearch}
-                                        onAction={handleAddProspect}
-                                        actionIcon={PlusCircle}
-                                        actionColor="bg-green-500 hover:bg-green-600"
-                                    />
+                             <div>
+                                <h3 className="text-lg font-semibold mb-2">Manage Prospects ({editedCampaign.prospectIds.length})</h3>
+                                <div className="max-h-[60vh] overflow-y-auto border dark:border-slate-700 rounded-lg">
+                                    <table className="min-w-full divide-y dark:divide-slate-700">
+                                        <thead className="bg-gray-50 dark:bg-slate-800/50 sticky top-0"><tr><th className="px-4 py-2 text-left text-sm font-medium text-gray-600 dark:text-slate-300">Name</th><th className="px-4 py-2 text-left text-sm font-medium text-gray-600 dark:text-slate-300">Company</th><th className="px-4 py-2 text-left text-sm font-medium text-gray-600 dark:text-slate-300">Status</th></tr></thead>
+                                        <tbody>
+                                            {prospects.map(p => (
+                                                <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                                                    <td className="p-4 flex items-center text-sm text-gray-800 dark:text-slate-200"><input type="checkbox" checked={isProspectInCampaign(p.id)} onChange={() => handleToggleProspect(p.id)} className="h-4 w-4 mr-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500"/>{p.name}</td>
+                                                    <td className="p-4 text-sm text-gray-600 dark:text-slate-400">{p.company}</td>
+                                                    <td className="p-4 text-sm text-gray-600 dark:text-slate-400">{p.status}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                              </div>
                         )}
+                         {activeTab === 'analytics' && <div className="text-center text-gray-500 p-8">Analytics coming soon.</div>}
+                         {activeTab === 'settings' && <div className="text-center text-gray-500 p-8">Settings coming soon.</div>}
                     </div>
-                </div>
-
-                {/* Footer */}
-                <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex justify-end items-center space-x-3 flex-shrink-0">
-                    <button type="button" onClick={onClose} className="px-4 py-2 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors">
-                        Cancel
-                    </button>
-                    <button type="button" onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm">
-                        Save Campaign
-                    </button>
                 </div>
             </div>
         </div>
