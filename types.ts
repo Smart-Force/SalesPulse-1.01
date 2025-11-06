@@ -98,8 +98,9 @@ export interface Template {
 
 export interface CampaignStep {
   id:string;
-  type: 'Email' | 'LinkedIn' | 'WhatsApp';
-  templateId: string;
+  type: 'Email' | 'LinkedIn' | 'WhatsApp' | 'Call' | 'Task';
+  templateId?: string;
+  message?: string;
   delayDays: number;
 }
 
@@ -143,4 +144,14 @@ export interface ResearchResult {
     isGeneratingOutreach?: boolean;
     isOutreachGenerated?: boolean;
     outreachSources?: any[];
+}
+
+export interface NewProspectData {
+    name: string;
+    company: string;
+    email: string;
+    phone?: string;
+    title?: string;
+    status: ProspectStatus;
+    tags: string[];
 }

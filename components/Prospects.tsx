@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { MoreVertical, Search, Trash2, Tag, PlusCircle, Phone, Briefcase, CheckCircle, AlertCircle, HelpCircle, Zap, Loader2, ArrowUp, ArrowDown, Edit, ChevronDown } from 'lucide-react';
 import TaggingModal from './modals/TaggingModal';
 import AddProspectModal from './modals/AddProspectModal';
-import { Prospect, ProspectStatus, ConfidenceScore, ContactHistoryItem } from '../types';
+import { Prospect, ProspectStatus, ConfidenceScore, ContactHistoryItem, NewProspectData } from '../types';
 import ProspectIntelligencePanel from './ProspectIntelligencePanel';
 import { generateProspectIntelligence } from '../services/geminiService';
 
@@ -30,8 +30,8 @@ interface ProspectsProps {
 }
 
 export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects }) => {
-    const [selectedProspects, setSelectedProspects] = useState<string[]>([]);
-    const [isTaggingModalOpen, setTaggingModalOpen] = useState(false);
+    const [selectedProspects, setSelectedProspects] = useState<string[]>(['1', '2']);
+    const [isTaggingModalOpen, setTaggingModalOpen] = useState(true);
     const [isAddModalOpen, setAddModalOpen] = useState(false);
     const [isStatusMenuOpen, setStatusMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -191,7 +191,7 @@ export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects })
         setStatusMenuOpen(false);
     };
 
-    const handleAddProspect = (newProspectData: Omit<Prospect, 'id' | 'avatarColor' | 'initials' | 'lastContact' | 'lastContactDate'>) => {
+    const handleAddProspect = (newProspectData: NewProspectData) => {
         const initials = newProspectData.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
         const newProspect: Prospect = {
             id: String(Date.now()),
@@ -360,7 +360,6 @@ export const Prospects: React.FC<ProspectsProps> = ({ prospects, setProspects })
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            {/* FIX: Corrected dynamic component rendering for JSX by assigning the icon to a capitalized variable. */}
                                             {prospect.confidenceScore && (() => {
                                                 const { icon: ConfidenceIcon, color } = confidenceStyles[prospect.confidenceScore];
                                                 return (

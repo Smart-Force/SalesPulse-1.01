@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Mail, Briefcase, Tag, Phone } from 'lucide-react';
-import type { Prospect, ProspectStatus } from '../../types';
-
-// FIX: Omitted `lastContactDate` to match the prop type from Prospects.tsx.
-type ProspectFormData = Omit<Prospect, 'id' | 'avatarColor' | 'initials' | 'lastContact' | 'lastContactDate'>;
+import type { ProspectStatus, NewProspectData } from '../../types';
 
 interface AddProspectModalProps {
   onClose: () => void;
-  onAddProspect: (prospectData: ProspectFormData) => void;
+  onAddProspect: (prospectData: NewProspectData) => void;
 }
 
 const statusOptions: ProspectStatus[] = ['New', 'Contacted', 'Engaged', 'Meeting', 'Closed'];
@@ -53,7 +50,7 @@ const AddProspectModal: React.FC<AddProspectModalProps> = ({ onClose, onAddProsp
         e.preventDefault();
         if (validate()) {
             const tags = tagsInput.split(',').map(tag => tag.trim()).filter(Boolean);
-            const prospectData = {
+            const prospectData: NewProspectData = {
                 ...formData,
                 phone: formData.phone || undefined,
                 title: formData.title || undefined,

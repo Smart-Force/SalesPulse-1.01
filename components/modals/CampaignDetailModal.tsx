@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Users, List, Sparkles, Mail, Linkedin, MessageCircle, Plus, ChevronDown, Wand2, Loader2, Bot, Clock, Trash2, GripVertical, Search, PlusCircle, MinusCircle, Link as LinkIcon } from 'lucide-react';
+import { X, Users, List, Sparkles, Mail, Linkedin, MessageCircle, Plus, ChevronDown, Wand2, Loader2, Bot, Clock, Trash2, GripVertical, Search, PlusCircle, MinusCircle, Link as LinkIcon, Phone, CheckSquare } from 'lucide-react';
 import type { Campaign, Prospect, Template, CampaignStep } from '../../types';
 import { generatePersonalizedEmail } from '../../services/geminiService';
 
@@ -24,6 +24,8 @@ const stepIcons: { [key in CampaignStep['type']]: React.ElementType } = {
     Email: Mail,
     LinkedIn: Linkedin,
     WhatsApp: MessageCircle,
+    Call: Phone,
+    Task: CheckSquare,
 };
 
 const StepCard: React.FC<{
@@ -65,7 +67,33 @@ const StepCard: React.FC<{
         }
     };
 
+    const handleTypeChange = (newType: CampaignStep['type']) => {
+        if (newType === step.type) return;
+
+        let updatedStep: CampaignStep = {
+            id: step.id,
+            type: newType,
+            delayDays: step.delayDays,
+        };
+
+        if (newType === 'Email') {
+            updatedStep.templateId = '';
+        } else {
+            updatedStep.message = '';
+        }
+
+        onUpdateStep(updatedStep);
+    };
+
     const StepIcon = stepIcons[step.type];
+    const isManualStep = step.type === 'LinkedIn' || step.type === 'WhatsApp' || step.type === 'Call' || step.type === 'Task';
+    
+    const manualStepContent: { [key: string]: { label: string, placeholder: string, previewLabel: string }} = {
+        'LinkedIn': { label: 'LinkedIn Message', placeholder: 'Craft your LinkedIn message here. You can use merge tags like {{first_name}} and {{company}}.', previewLabel: 'Message' },
+        'WhatsApp': { label: 'WhatsApp Message', placeholder: 'Craft your WhatsApp message here. You can use merge tags like {{first_name}} and {{company}}.', previewLabel: 'Message' },
+        'Call': { label: 'Call Script / Notes', placeholder: 'Enter key talking points or a script for the call.', previewLabel: 'Script' },
+        'Task': { label: 'Task Details', placeholder: 'Enter the details of the manual task for the sales rep.', previewLabel: 'Details' },
+    };
 
     return (
         <div className="border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
@@ -74,9 +102,25 @@ const StepCard: React.FC<{
                     <GripVertical className="h-5 w-5 text-gray-400 cursor-grab" />
                     <StepIcon className="h-5 w-5 text-blue-500" />
                     <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-slate-100">Step {stepNumber}: {step.type}</h4>
+                        <div className="flex items-center space-x-2">
+                            <h4 className="font-semibold text-gray-900 dark:text-slate-100">Step {stepNumber}:</h4>
+                            <select 
+                                value={step.type}
+                                onChange={(e) => handleTypeChange(e.target.value as CampaignStep['type'])}
+                                className="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded-md shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200 text-sm font-medium focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                {Object.keys(stepIcons).map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
+                            </select>
+                        </div>
                         {step.type === 'Email' && (
-                            <p className="text-sm text-gray-500 dark:text-slate-400">Template: "{template?.name || 'No template selected'}"</p>
+                            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">Template: "{template?.name || 'No template selected'}"</p>
+                        )}
+                        {isManualStep && (
+                             <p className="text-sm text-gray-500 dark:text-slate-400 truncate max-w-xs mt-0.5">
+                                {manualStepContent[step.type].previewLabel}: "{step.message?.substring(0, 30) || 'No content yet'}{step.message && step.message.length > 30 ? '...' : ''}"
+                            </p>
                         )}
                     </div>
                 </div>
@@ -95,13 +139,25 @@ const StepCard: React.FC<{
                 <div className="p-4 border-t border-gray-200 dark:border-slate-700">
                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Select Email Template</label>
                      <select 
-                        value={step.templateId} 
+                        value={step.templateId || ''} 
                         onChange={(e) => onUpdateStep({...step, templateId: e.target.value})}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200"
                     >
                         <option value="">-- Choose a template --</option>
                         {allTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                      </select>
+                </div>
+            )}
+            {isManualStep && (
+                <div className="p-4 border-t border-gray-200 dark:border-slate-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{manualStepContent[step.type].label}</label>
+                    <textarea
+                        value={step.message || ''}
+                        onChange={(e) => onUpdateStep({...step, message: e.target.value})}
+                        rows={4}
+                        placeholder={manualStepContent[step.type].placeholder}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-200 focus:ring-blue-500 focus:border-blue-500"
+                    />
                 </div>
             )}
             {isExpanded && step.type === 'Email' && template && (
@@ -193,6 +249,10 @@ const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ onClose, camp
     const [inCampaignSearch, setInCampaignSearch] = useState('');
     const [availableSearch, setAvailableSearch] = useState('');
     
+    // State for drag-and-drop
+    const [draggedStepId, setDraggedStepId] = useState<string | null>(null);
+    const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
     useEffect(() => {
         setCampaign(initialCampaign);
     }, [initialCampaign]);
@@ -229,12 +289,23 @@ const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ onClose, camp
     };
 
     const handleAddStep = (type: CampaignStep['type']) => {
+        let delayDays = 3;
+        if (type === 'WhatsApp' || type === 'Task') {
+            delayDays = 1;
+        } else if (type === 'Call') {
+            delayDays = 2;
+        }
+
         const newStep: CampaignStep = {
             id: crypto.randomUUID(),
             type,
-            templateId: '',
-            delayDays: 3,
+            delayDays,
         };
+        if (type === 'Email') {
+            newStep.templateId = '';
+        } else {
+            newStep.message = '';
+        }
         setCampaign(prev => ({...prev, steps: [...prev.steps, newStep]}));
         setShowAddStepMenu(false);
     };
@@ -252,6 +323,52 @@ const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ onClose, camp
     const handleSave = () => {
         onUpdateCampaign(campaign);
         onClose();
+    };
+
+    // Drag-and-drop handlers
+    const handleDragStart = (e: React.DragEvent, stepId: string) => {
+        setDraggedStepId(stepId);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e: React.DragEvent, stepId: string) => {
+        e.preventDefault();
+        if (draggedStepId !== stepId) {
+            setDropTargetId(stepId);
+        }
+    };
+    
+    const handleDragLeave = () => {
+        setDropTargetId(null);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        if (!draggedStepId || !dropTargetId || draggedStepId === dropTargetId) {
+            handleDragEnd();
+            return;
+        }
+
+        const currentSteps = campaign.steps;
+        const draggedIndex = currentSteps.findIndex(s => s.id === draggedStepId);
+        const dropIndex = currentSteps.findIndex(s => s.id === dropTargetId);
+
+        if (draggedIndex === -1 || dropIndex === -1) {
+            handleDragEnd();
+            return;
+        }
+
+        const newSteps = Array.from(currentSteps);
+        const [removed] = newSteps.splice(draggedIndex, 1);
+        newSteps.splice(dropIndex, 0, removed);
+        
+        setCampaign(prev => ({ ...prev, steps: newSteps }));
+        handleDragEnd();
+    };
+    
+    const handleDragEnd = () => {
+        setDraggedStepId(null);
+        setDropTargetId(null);
     };
 
     const ProspectList: React.FC<{
@@ -330,37 +447,58 @@ const CampaignDetailModal: React.FC<CampaignDetailModalProps> = ({ onClose, camp
                             <div className="max-w-3xl mx-auto">
                                 <h2 className="text-xl font-bold text-gray-800 dark:text-slate-200 mb-6">Campaign Sequence</h2>
                                 
-                                <div>
+                                <div onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
                                     {campaign.steps.map((step, index) => (
-                                        <React.Fragment key={step.id}>
-                                            {index > 0 && <DelayIndicator days={step.delayDays} onUpdateDelay={(days) => handleUpdateStep({...step, delayDays: days})} />}
-                                            <StepCard 
-                                                step={step} 
-                                                stepNumber={index + 1}
-                                                allTemplates={allTemplates}
-                                                onUpdateStep={handleUpdateStep}
-                                                onDeleteStep={handleDeleteStep}
-                                                isExpanded={expandedStepId === step.id}
-                                                onToggleExpand={() => setExpandedStepId(prev => prev === step.id ? null : step.id)}
-                                                campaignProspects={campaignProspects}
-                                            />
-                                        </React.Fragment>
+                                        <div key={step.id}>
+                                            {dropTargetId === step.id && draggedStepId !== step.id && (
+                                                <div className="h-1.5 my-3 rounded-full bg-blue-500" />
+                                            )}
+                                            <div
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, step.id)}
+                                                onDragOver={(e) => handleDragOver(e, step.id)}
+                                                onDragLeave={handleDragLeave}
+                                                onDragEnd={handleDragEnd}
+                                                className={`transition-opacity ${draggedStepId === step.id ? 'opacity-30' : 'opacity-100'}`}
+                                            >
+                                                {index > 0 && <DelayIndicator days={step.delayDays} onUpdateDelay={(days) => handleUpdateStep({...step, delayDays: days})} />}
+                                                <StepCard 
+                                                    step={step} 
+                                                    stepNumber={index + 1}
+                                                    allTemplates={allTemplates}
+                                                    onUpdateStep={handleUpdateStep}
+                                                    onDeleteStep={handleDeleteStep}
+                                                    isExpanded={expandedStepId === step.id}
+                                                    onToggleExpand={() => setExpandedStepId(prev => prev === step.id ? null : step.id)}
+                                                    campaignProspects={campaignProspects}
+                                                />
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                                 
+                                {campaign.steps.length === 0 && (
+                                    <div className="text-center py-16">
+                                        <p className="text-gray-500 dark:text-slate-400">This campaign sequence is empty.</p>
+                                    </div>
+                                )}
+                                
                                 <div className="relative mt-6 flex justify-center">
-                                    <button onClick={() => setShowAddStepMenu(true)} className="bg-white dark:bg-slate-700 border-2 border-dashed border-gray-300 dark:border-slate-600 text-gray-600 dark:text-slate-400 font-semibold py-2 px-4 rounded-lg hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center shadow-sm text-sm">
+                                    <button onClick={() => setShowAddStepMenu(true)} className="bg-white dark:bg-slate-800 border border-gray-400 dark:border-slate-500 text-gray-800 dark:text-slate-200 font-semibold py-2 px-4 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors flex items-center shadow-sm text-sm focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                                         <Plus className="h-4 w-4 mr-2" />
                                         Add Step
                                     </button>
                                     {showAddStepMenu && (
                                         <div 
                                             onMouseLeave={() => setShowAddStepMenu(false)}
-                                            className="absolute bottom-full mb-2 w-48 bg-white dark:bg-slate-700 rounded-md shadow-lg border dark:border-slate-600 z-10 py-1"
+                                            className="absolute bottom-full mb-2 bg-white dark:bg-slate-700 rounded-lg shadow-xl z-10 p-2 space-y-1"
                                         >
-                                            <button onClick={() => handleAddStep('Email')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600"><Mail className="h-4 w-4 mr-2 text-blue-500"/>Email</button>
-                                            <button onClick={() => handleAddStep('LinkedIn')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600"><Linkedin className="h-4 w-4 mr-2 text-sky-600"/>LinkedIn Message</button>
-                                            <button onClick={() => handleAddStep('WhatsApp')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600"><MessageCircle className="h-4 w-4 mr-2 text-green-500"/>WhatsApp</button>
+                                            <button onClick={() => handleAddStep('Email')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><Mail className="h-5 w-5 mr-3 text-gray-500"/>Email</button>
+                                            <button onClick={() => handleAddStep('LinkedIn')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><Linkedin className="h-5 w-5 mr-3 text-sky-600"/>LinkedIn Message</button>
+                                            <button onClick={() => handleAddStep('WhatsApp')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><MessageCircle className="h-5 w-5 mr-3 text-green-500"/>WhatsApp</button>
+                                            <div className="border-t border-gray-200 dark:border-slate-600 my-1"></div>
+                                            <button onClick={() => handleAddStep('Call')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><Phone className="h-5 w-5 mr-3 text-purple-500"/>Phone Call</button>
+                                            <button onClick={() => handleAddStep('Task')} className="w-full text-left flex items-center px-3 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-md"><CheckSquare className="h-5 w-5 mr-3 text-yellow-500"/>Manual Task</button>
                                         </div>
                                     )}
                                 </div>

@@ -133,7 +133,7 @@ export const generateProspectIntelligence = async (prospect: Prospect): Promise<
           ]
         }
     `;
-
+    let responseTextForParsing = '';
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -143,12 +143,22 @@ export const generateProspectIntelligence = async (prospect: Prospect): Promise<
             },
         });
         
-        const jsonText = response.text.trim();
+        responseTextForParsing = response.text;
+        let jsonText = responseTextForParsing.trim();
+
+        // The model might return conversational text. Extract the JSON object.
+        const objStartIndex = jsonText.indexOf('{');
+        const objEndIndex = jsonText.lastIndexOf('}');
+        if (objStartIndex > -1 && objEndIndex > -1) {
+            jsonText = jsonText.substring(objStartIndex, objEndIndex + 1);
+        }
+        
         const intelligence = JSON.parse(jsonText);
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
         return { intelligence, sources };
     } catch (error) {
         console.error("Error generating prospect intelligence:", error);
+        console.error("Original text that failed to parse in generateProspectIntelligence:", responseTextForParsing);
         throw new Error("Failed to generate AI-powered insights.");
     }
 };
@@ -244,7 +254,7 @@ export const findCompaniesAndExecutives = async (city: string, companySize: stri
             "dataConfidenceScore": "integer"
         }
     `;
-
+    let responseTextForParsing = '';
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -254,13 +264,23 @@ export const findCompaniesAndExecutives = async (city: string, companySize: stri
             },
         });
 
-        const jsonText = response.text.trim();
+        responseTextForParsing = response.text;
+        let jsonText = responseTextForParsing.trim();
+
+        // The model might return conversational text. Extract the JSON array.
+        const arrayStartIndex = jsonText.indexOf('[');
+        const arrayEndIndex = jsonText.lastIndexOf(']');
+        if (arrayStartIndex > -1 && arrayEndIndex > -1) {
+            jsonText = jsonText.substring(arrayStartIndex, arrayEndIndex + 1);
+        }
+
         const results = JSON.parse(jsonText);
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
         
         return { results, sources };
     } catch (error) {
         console.error("Error finding companies:", error);
+        console.error("Original text that failed to parse in findCompaniesAndExecutives:", responseTextForParsing);
         throw new Error("Failed to generate company and executive data.");
     }
 };
@@ -302,7 +322,7 @@ export const generateOutreachPlan = async (prospect: ResearchResult): Promise<{ 
           "linkedinMessage3": "string"
         }
     `;
-
+    let responseTextForParsing = '';
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -312,12 +332,22 @@ export const generateOutreachPlan = async (prospect: ResearchResult): Promise<{ 
             },
         });
         
-        const jsonText = response.text.trim();
+        responseTextForParsing = response.text;
+        let jsonText = responseTextForParsing.trim();
+
+        // The model might return conversational text. Extract the JSON object.
+        const objStartIndex = jsonText.indexOf('{');
+        const objEndIndex = jsonText.lastIndexOf('}');
+        if (objStartIndex > -1 && objEndIndex > -1) {
+            jsonText = jsonText.substring(objStartIndex, objEndIndex + 1);
+        }
+        
         const plan = JSON.parse(jsonText);
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
         return { plan, sources };
     } catch (error) {
         console.error("Error generating outreach plan:", error);
+        console.error("Original text that failed to parse in generateOutreachPlan:", responseTextForParsing);
         throw new Error("Failed to generate AI-powered outreach plan.");
     }
 };
