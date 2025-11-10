@@ -11,15 +11,15 @@ interface RolesSettingsProps {
     currentUser: User;
 }
 
-const getRolesToManage = (currentUserRole: UserRole): Exclude<UserRole, 'Super Admin'>[] => {
+const getRolesToManage = (currentUserRole: UserRole): UserRole[] => {
     const roleHierarchy: Record<UserRole, number> = {
-        'Super Admin': 3,
-        'Admin': 2,
-        'Manager': 1,
-        'Member': 0
+        'Super Admin': 4,
+        'Admin': 3,
+        'Manager': 2,
+        'Member': 1
     };
     const roles: UserRole[] = ['Admin', 'Manager', 'Member'];
-    return roles.filter(role => roleHierarchy[currentUserRole] > roleHierarchy[role]) as Exclude<UserRole, 'Super Admin'>[];
+    return roles.filter(role => roleHierarchy[currentUserRole] > roleHierarchy[role]);
 };
 
 const RolesSettings: React.FC<RolesSettingsProps> = ({ rolePermissions, setRolePermissions, currentUser }) => {
@@ -31,19 +31,19 @@ const RolesSettings: React.FC<RolesSettingsProps> = ({ rolePermissions, setRoleP
 
     const handlePermissionChange = (role: UserRole, view: View, isChecked: boolean) => {
         setEditedPermissions(prev => {
-            const newPermissions = JSON.parse(JSON.stringify(prev)); // Deep copy to avoid state mutation issues
-            
+            const newPermissions = JSON.parse(JSON.stringify(prev)); // Deep copy
             if (!newPermissions[role]) newPermissions[role] = {};
-            if (!newPermissions[role][view]) newPermissions[role][view] = { view: false, create: false, edit: false, delete: false };
-    
+            if (!newPermissions[role][view]) newPermissions[role][view] = {};
+            
             newPermissions[role][view].view = isChecked;
-    
-            // For this simplified UI, checking view also grants/removes other permissions.
+
+            // Simple logic: if view is disabled, disable all others. If enabled, enable all.
+            // This can be made more granular in the future.
             const otherPerms = isChecked;
             newPermissions[role][view].create = otherPerms;
             newPermissions[role][view].edit = otherPerms;
             newPermissions[role][view].delete = otherPerms;
-    
+
             return newPermissions;
         });
     };
@@ -65,14 +65,29 @@ const RolesSettings: React.FC<RolesSettingsProps> = ({ rolePermissions, setRoleP
     const hasChanges = JSON.stringify(rolePermissions) !== JSON.stringify(editedPermissions);
 
     const { pageViews, settingsViews } = useMemo(() => {
-        const settingsViewNames = ['Settings - Team', 'Settings - AI Provider', 'Settings - Roles', 'Settings - Billing'];
-        const pages = allViews.filter(v => !settingsViewNames.includes(v) && v !== 'Settings');
-        const settings = allViews.filter(v => settingsViewNames.includes(v));
+        const pages = allViews.filter(v => !v.startsWith('Settings - ') && v !== 'Settings');
+        const settings = allViews.filter(v => v.startsWith('Settings - '));
         return { pageViews: pages, settingsViews: settings };
     }, []);
 
+    const settingsLabels: { [key in View]?: string } = {
+        'Settings - Team': 'Team',
+        'Settings - Billing': 'Billing',
+        'Settings - AI Provider': 'AI Provider',
+        'Settings - Roles': 'Roles & Permissions',
+    };
+    
     if (currentUser.role !== 'Admin' && currentUser.role !== 'Super Admin') {
-        return null; 
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Roles & Permissions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-gray-500 dark:text-slate-400">You do not have permission to manage roles.</p>
+                </CardContent>
+            </Card>
+        ); 
     }
 
     return (
@@ -95,7 +110,7 @@ const RolesSettings: React.FC<RolesSettingsProps> = ({ rolePermissions, setRoleP
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                     {pageViews.map(view => {
                                         const isChecked = editedPermissions[role]?.[view]?.view || false;
-                                        const isDisabled = view === 'Dashboard';
+                                        const isDisabled = view === 'Dashboard' || view === 'Settings';
                                         
                                         return (
                                         <label
@@ -119,7 +134,7 @@ const RolesSettings: React.FC<RolesSettingsProps> = ({ rolePermissions, setRoleP
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                     {settingsViews.map(view => {
                                         const isChecked = editedPermissions[role]?.[view]?.view || false;
-                                        const label = view.replace('Settings - ', '');
+                                        const label = settingsLabels[view] || view;
                                         return (
                                         <label
                                             key={view}
@@ -140,23 +155,25 @@ const RolesSettings: React.FC<RolesSettingsProps> = ({ rolePermissions, setRoleP
                     </div>
                 ))}
             </CardContent>
-            <CardFooter className="border-t dark:border-slate-700 pt-6 flex justify-end items-center gap-x-3">
-                <button 
-                  onClick={handleCancel}
-                  disabled={!hasChanges || isSaving}
-                  className="px-4 py-2 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleSaveChanges}
-                  disabled={!hasChanges || isSaving}
-                  className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {isSaving && <Loader2 className="h-5 w-5 mr-2 animate-spin" />}
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </button>
-            </CardFooter>
+            {hasChanges && (
+                <CardFooter className="border-t dark:border-slate-700 pt-6 flex justify-end items-center gap-x-3">
+                    <button 
+                      onClick={handleCancel}
+                      disabled={isSaving}
+                      className="px-4 py-2 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-semibold hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleSaveChanges}
+                      disabled={isSaving}
+                      className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {isSaving && <Loader2 className="h-5 w-5 mr-2 animate-spin" />}
+                      {isSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                </CardFooter>
+            )}
         </Card>
     );
 };

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { User as UserIcon, Lock, Settings as SettingsIcon, Palette, CreditCard, Bell, Users, Bot, Shield } from 'lucide-react';
-// FIX: Replace old/problematic imports with new consolidated settings components
 import { SettingsProfile } from './settings/SettingsProfile';
 import { SettingsSecurity } from './settings/SettingsSecurity';
 import { SettingsTeam } from './settings/SettingsTeam';
 import { SettingsWorkspace } from './settings/WorkspaceSettings';
-import { NotificationsSettings } from './settings/NotificationsSettings';
-import type { SettingsTab, User, AIProvider, UserRole, ApiKeys, RolePermissions } from '../types';
+// FIX: Import the 'View' type to resolve the 'Cannot find name' error.
+import type { SettingsTab, User, AIProvider, UserRole, ApiKeys, RolePermissions, View } from '../types';
+import { useHasPermission } from '../contexts/PermissionContext';
 
 interface SettingsProps {
     users: User[];
@@ -14,7 +14,7 @@ interface SettingsProps {
     aiProvider: AIProvider;
     setAiProvider: (provider: AIProvider) => void;
     currentUser: User;
-    onInviteUser: (name: string, email: string, role: UserRole) => { success: boolean; message: string; };
+    onInviteUser: (name: string, email: string, role: UserRole) => { success: boolean, message: string; };
     apiKeys: ApiKeys;
     setApiKeys: (keys: ApiKeys) => void;
     rolePermissions: RolePermissions;
@@ -23,18 +23,14 @@ interface SettingsProps {
 }
 
 const userSettingsTabs: { id: SettingsTab; name: string; icon: React.ElementType }[] = [
-  { id: 'profile', name: 'Profile', icon: UserIcon },
+  { id: 'profile', name: 'Profile & Appearance', icon: UserIcon },
   { id: 'security', name: 'Security', icon: Lock },
-  { id: 'notifications', name: 'Notifications', icon: Bell },
-  { id: 'appearance', name: 'Appearance', icon: Palette },
 ];
 
-const workspaceSettingsTabs: { id: SettingsTab; name: string; icon: React.ElementType, adminOnly?: boolean }[] = [
-  { id: 'account', name: 'Account', icon: SettingsIcon },
-  { id: 'team', name: 'Team', icon: Users },
-  { id: 'billing', name: 'Billing', icon: CreditCard },
-  { id: 'ai-provider', name: 'AI Provider', icon: Bot },
-  { id: 'roles', name: 'Roles & Permissions', icon: Shield, adminOnly: true },
+const workspaceSettingsTabs: { id: SettingsTab; name: string; icon: React.ElementType, requiredPermission: View }[] = [
+  { id: 'team', name: 'Team & Roles', icon: Users, requiredPermission: 'Settings - Team' },
+  { id: 'billing', name: 'Billing', icon: CreditCard, requiredPermission: 'Settings - Billing' },
+  { id: 'ai-provider', name: 'AI Provider', icon: Bot, requiredPermission: 'Settings - AI Provider' },
 ];
 
 type NavButtonProps = {
@@ -57,34 +53,59 @@ const NavButton: React.FC<NavButtonProps> = ({ tab, isActive, onClick }) => (
   </button>
 );
 
-export const Settings: React.FC<SettingsProps> = ({ users, setUsers, aiProvider, setAiProvider, currentUser, onInviteUser, apiKeys, setApiKeys, rolePermissions, setRolePermissions, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('team');
+export const Settings: React.FC<SettingsProps> = (props) => {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
 
-  // FIX: Update renderContent to use new consolidated components and pass correct props
   const renderContent = () => {
     switch (activeTab) {
       case 'profile':
-      case 'appearance':
         return <SettingsProfile />;
       case 'security':
         return <SettingsSecurity />;
       case 'team':
-      case 'roles':
-        return <SettingsTeam users={users} setUsers={setUsers} currentUser={currentUser} onInviteUser={onInviteUser} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} />;
-      case 'account':
+        return <SettingsTeam {...props} />;
       case 'billing':
       case 'ai-provider':
-        return <SettingsWorkspace currentProvider={aiProvider} onProviderChange={setAiProvider} currentUser={currentUser} apiKeys={apiKeys} setApiKeys={setApiKeys} onLogout={onLogout} />;
-      case 'notifications':
-        return <NotificationsSettings />;
+        // FIX: Explicitly map props to match the 'WorkspaceSettingsProps' interface.
+        return <SettingsWorkspace 
+            currentProvider={props.aiProvider}
+            onProviderChange={props.setAiProvider}
+            currentUser={props.currentUser}
+            apiKeys={props.apiKeys}
+            setApiKeys={props.setApiKeys}
+            onLogout={props.onLogout}
+        />;
       default:
         return <SettingsProfile />;
     }
   };
   
-  const filteredWorkspaceTabs = workspaceSettingsTabs.filter(tab => 
-      !tab.adminOnly || (currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Super Admin'))
-  );
+  const FilteredWorkspaceNav = () => {
+    const hasTeamAccess = useHasPermission('Settings - Team');
+    const hasBillingAccess = useHasPermission('Settings - Billing');
+    const hasAIAccess = useHasPermission('Settings - AI Provider');
+    
+    const visibleTabs = workspaceSettingsTabs.filter(tab => {
+        if (tab.id === 'team') return hasTeamAccess;
+        if (tab.id === 'billing') return hasBillingAccess;
+        if (tab.id === 'ai-provider') return hasAIAccess;
+        return true;
+    });
+
+    if (visibleTabs.length === 0) return null;
+
+    return (
+        <div>
+            <h2 className="px-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-2">Workspace Settings</h2>
+            <div className="space-y-1">
+            {visibleTabs.map((tab) => (
+                <NavButton key={tab.id} tab={tab} isActive={activeTab === tab.id} onClick={setActiveTab} />
+            ))}
+            </div>
+        </div>
+    );
+  }
+
 
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -103,14 +124,7 @@ export const Settings: React.FC<SettingsProps> = ({ users, setUsers, aiProvider,
                 ))}
               </div>
             </div>
-             <div>
-              <h2 className="px-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-2">Workspace Settings</h2>
-              <div className="space-y-1">
-                {filteredWorkspaceTabs.map((tab) => (
-                  <NavButton key={tab.id} tab={tab} isActive={activeTab === tab.id} onClick={setActiveTab} />
-                ))}
-              </div>
-            </div>
+             <FilteredWorkspaceNav />
           </nav>
         </aside>
         <main className="md:w-3/4 lg:w-4/5">

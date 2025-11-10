@@ -1,4 +1,10 @@
-export type View = 'Dashboard' | 'Email Inbox' | 'Prospects' | 'Campaigns' | 'Lead Generation' | 'Products' | 'Analytics' | 'Live Call' | 'Integrations' | 'Settings' | 'Workflows';
+// FIX: Add missing views for Playbooks, AI Generator, and granular settings.
+export type View =
+  | 'Dashboard' | 'Email Inbox' | 'Prospects' | 'Campaigns'
+  | 'Lead Generation' | 'Products' | 'Analytics' | 'Live Call'
+  | 'Integrations' | 'Settings' | 'Workflows' | 'Playbooks' | 'AI Generator'
+  // Granular settings views for permissions
+  | 'Settings - Team' | 'Settings - AI Provider' | 'Settings - Roles' | 'Settings - Billing';
 
 // FIX: Add 'Super Admin' to UserRole to resolve type errors in TeamSettings.tsx and RolesSettings.tsx.
 export type UserRole = 'Super Admin' | 'Admin' | 'Manager' | 'Member';
@@ -191,8 +197,19 @@ export interface ToastMessage {
   type: ToastType;
 }
 
+// FIX: Add PermissionAction interface for granular permissions.
+export interface PermissionAction {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+}
+
+// FIX: Update RolePermissions to map views to permission actions.
 export type RolePermissions = {
-  [key in UserRole]: View[];
+  [key in UserRole]: {
+    [key in View]?: Partial<PermissionAction>;
+  };
 };
 
 export interface CampaignStep {

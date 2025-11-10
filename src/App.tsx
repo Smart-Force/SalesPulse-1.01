@@ -21,10 +21,6 @@ import { initialWorkflows } from './data/workflows';
 import { initialRolePermissions } from './data/permissions';
 import type { View, User, AIProvider, Prospect, ProspectList, Deal, Product, UserRole, Workflow, RolePermissions, ApiKeys } from './types';
 import { useToasts } from './contexts/ToastContext';
-import { PermissionContext } from './contexts/PermissionContext';
-import { Playbooks } from './components/Playbooks';
-import { AIGenerator } from './components/AIGenerator';
-
 
 const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -138,6 +134,7 @@ const App: React.FC = () => {
              return <div className="p-8 text-center text-red-500">Access denied. You do not have permission to view the '{activeView}' page.</div>;
         }
         switch (activeView) {
+            // FIX: Pass required props to Dashboard component.
             case 'Dashboard': return <Dashboard prospects={prospects} deals={deals} />;
             case 'Email Inbox': return <EmailInbox />;
             case 'Prospects': return <Prospects prospects={prospects} setProspects={setProspects} prospectLists={prospectLists} setProspectLists={setProspectLists} deals={deals} setDeals={setDeals} products={products} />;
@@ -145,12 +142,14 @@ const App: React.FC = () => {
             case 'Workflows': return <Workflows workflows={workflows} setWorkflows={setWorkflows} prospects={prospects} />;
             case 'Lead Generation': return <LeadGeneration onAddProspects={handleAddProspects} prospects={prospects} />;
             case 'Products': return <Products products={products} setProducts={setProducts} />;
+            // FIX: Pass required props to Analytics component.
             case 'Analytics': return <Analytics prospects={prospects} deals={deals} />;
+            // FIX: Pass required props to LiveCall component.
             case 'Live Call': return <LiveCall prospects={prospects} setProspects={setProspects} />;
             case 'Integrations': return <Integrations connectedIntegrations={connectedIntegrations} onToggleIntegration={handleToggleIntegration} />;
+            // FIX: Pass required props to Settings component.
             case 'Settings': return <Settings users={users} setUsers={setUsers} aiProvider={aiProvider} setAiProvider={handleSetAiProvider} currentUser={currentUser!} onInviteUser={handleInviteUser} apiKeys={apiKeys} setApiKeys={handleSetApiKeys} rolePermissions={rolePermissions} setRolePermissions={handleSetRolePermissions} onLogout={handleLogout} />;
-            case 'Playbooks': return <Playbooks />;
-            case 'AI Generator': return <AIGenerator />;
+            // FIX: Pass required props to Dashboard component.
             default: return <Dashboard prospects={prospects} deals={deals} />;
         }
     };
@@ -160,17 +159,15 @@ const App: React.FC = () => {
     }
 
     return (
-        <PermissionContext.Provider value={{ user: currentUser, permissions: rolePermissions }}>
-            <Layout 
-                activeView={activeView} 
-                setActiveView={setActiveView} 
-                currentUser={currentUser} 
-                onLogout={handleLogout}
-                availableViews={availableViews}
-            >
-                {renderView()}
-            </Layout>
-        </PermissionContext.Provider>
+        <Layout 
+            activeView={activeView} 
+            setActiveView={setActiveView} 
+            currentUser={currentUser} 
+            onLogout={handleLogout}
+            availableViews={availableViews}
+        >
+            {renderView()}
+        </Layout>
     );
 };
 

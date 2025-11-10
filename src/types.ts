@@ -1,4 +1,3 @@
-
 export type View =
   | 'Dashboard' | 'Email Inbox' | 'Prospects' | 'Campaigns'
   | 'Lead Generation' | 'Products' | 'Analytics' | 'Live Call'
@@ -183,7 +182,7 @@ export interface Product {
     discountRate: number;
 }
 
-export type SettingsTab = 'profile' | 'security' | 'account' | 'team' | 'appearance' | 'billing' | 'notifications' | 'ai-provider' | 'roles';
+export type SettingsTab = 'profile' | 'security' | 'team' | 'ai-provider' | 'billing';
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'mock' | 'glm';
 export type ApiKeys = { [key in AIProvider]?: string; };
 
@@ -195,7 +194,6 @@ export interface ToastMessage {
   type: ToastType;
 }
 
-// FIX: Define PermissionAction to be used for role-based access control.
 export interface PermissionAction {
   view: boolean;
   create: boolean;
@@ -203,7 +201,6 @@ export interface PermissionAction {
   delete: boolean;
 }
 
-// FIX: Update RolePermissions to correctly type the permissions object.
 export type RolePermissions = {
   [key in UserRole]: {
     [key in View]?: Partial<PermissionAction>;

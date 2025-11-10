@@ -42,7 +42,12 @@ const App: React.FC = () => {
 
     const availableViews = useMemo(() => {
         if (!currentUser) return [];
-        return rolePermissions[currentUser.role];
+        const permissions = rolePermissions[currentUser.role];
+        if (!permissions) return [];
+        // FIX: availableViews should be an array of View strings from the permissions object, not the object itself. This resolves multiple type errors.
+        return Object.entries(permissions)
+            .filter(([, perms]) => perms?.view)
+            .map(([view]) => view as View);
     }, [currentUser, rolePermissions]);
 
     useEffect(() => {
@@ -83,8 +88,9 @@ const App: React.FC = () => {
     
     const handleLogin = (user: User) => {
         setCurrentUser(user);
-        const userPermissions = rolePermissions[user.role] || [];
-        if (!userPermissions.includes(activeView)) {
+        const userPermissions = rolePermissions[user.role] || {};
+        // FIX: Check for view permission on the permissions object directly, instead of using .includes on an object.
+        if (!userPermissions[activeView]?.view) {
             setActiveView('Dashboard');
         }
     };
